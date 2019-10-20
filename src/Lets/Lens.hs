@@ -323,14 +323,13 @@ setP ::
   Prism s t a b
   -> s
   -> Either t a
-setP p s = undefined
+setP p = either Right Left . p Left
 
 getP ::
   Prism s t a b
   -> b
   -> t
-getP _ _ =
-  error "todo: getP"
+getP p = getIdentity . getTagged . p . Tagged . Identity
 
 type Prism' a b =
   Prism a a b b
