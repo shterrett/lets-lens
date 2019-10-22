@@ -795,12 +795,20 @@ traverseLocality f (Locality x y z) =
 intOrIntP ::
   Prism' (IntOr a) Int
 intOrIntP =
-  error "todo: intOrIntP"
+    prism IntOrIs
+          (\case
+            (IntOrIs i) -> Right i
+            (IntOrIsNot n) -> Left (IntOrIsNot n)
+          )
 
 intOrP ::
   Prism (IntOr a) (IntOr b) a b
 intOrP =
-  error "todo: intOrP"
+    prism IntOrIsNot
+          (\case
+            (IntOrIs i) -> Left (IntOrIs i)
+            (IntOrIsNot n) -> Right n
+          )
 
 -- |
 --
@@ -816,4 +824,4 @@ intOrLengthEven ::
   IntOr [a]
   -> IntOr Bool
 intOrLengthEven =
-  error "todo: intOrLengthEven"
+    over intOrP (even . length)
