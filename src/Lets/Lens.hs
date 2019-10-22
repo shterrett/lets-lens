@@ -1,6 +1,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TupleSections #-}
 
 module Lets.Lens (
   fmapT
@@ -352,8 +353,7 @@ modify ::
   -> (a -> b)
   -> s
   -> t
-modify _ _ _ =
-  error "todo: modify"
+modify l f =  getIdentity . l (Identity . f)
 
 -- | An alias for @modify@.
 (%~) ::
@@ -361,8 +361,7 @@ modify _ _ _ =
   -> (a -> b)
   -> s
   -> t
-(%~) =
-  modify
+(%~) = modify
 
 infixr 4 %~
 
@@ -382,8 +381,7 @@ infixr 4 %~
   -> b
   -> s
   -> t
-(.~) _ _ _ =
-  error "todo: (.~)"
+(.~) l b = modify l (const b)
 
 infixl 5 .~
 
@@ -402,9 +400,8 @@ fmodify ::
   Lens s t a b
   -> (a -> f b)
   -> s
-  -> f t 
-fmodify _ _ _ =
-  error "todo: fmodify"
+  -> f t
+fmodify = id
 
 -- |
 --
@@ -419,8 +416,7 @@ fmodify _ _ _ =
   -> f b
   -> s
   -> f t
-(|=) _ _ _ =
-  error "todo: (|=)"
+(|=) l fb = fmodify l (const fb)
 
 infixl 5 |=
 
@@ -430,8 +426,7 @@ infixl 5 |=
 -- (30,"abc")
 fstL ::
   Lens (a, x) (b, x) a b
-fstL =
-  error "todo: fstL"
+fstL f (a, x) = (,x) <$> f a
 
 -- |
 --
@@ -439,8 +434,7 @@ fstL =
 -- (13,"abcdef")
 sndL ::
   Lens (x, a) (x, b) a b
-sndL =
-  error "todo: sndL"
+sndL f (x, a) = (x,) <$> f a
 
 -- |
 --
@@ -470,8 +464,18 @@ mapL ::
   Ord k =>
   k
   -> Lens (Map k v) (Map k v) (Maybe v) (Maybe v)
-mapL =
-  error "todo: mapL"
+mapL k (f :: Maybe v -> f (Maybe v)) m =
+    let
+      maybeV = Map.lookup k m
+    in
+      (\maybeV' ->
+        case maybeV' of
+          Just v' -> Map.insert k v' m
+          Nothing ->
+            case maybeV of
+              Just _ -> Map.delete k m
+              Nothing -> m
+      ) <$> f maybeV
 
 -- |
 --
@@ -501,8 +505,11 @@ setL ::
   Ord k =>
   k
   -> Lens (Set.Set k) (Set.Set k) Bool Bool
-setL =
-  error "todo: setL"
+setL k (f :: Bool -> f Bool) s =
+    let
+      mbr = Set.member k s
+    in
+      const s <$> f mbr
 
 -- |
 --
@@ -515,8 +522,7 @@ compose ::
   Lens s t a b
   -> Lens q r s t
   -> Lens q r a b
-compose _ _ =
-  error "todo: compose"
+compose l m = m . l
 
 -- | An alias for @compose@.
 (|.) ::
@@ -537,8 +543,7 @@ infixr 9 |.
 -- 4
 identity ::
   Lens a b a b
-identity =
-  error "todo: identity"
+identity = ($)
 
 -- |
 --
@@ -548,11 +553,14 @@ identity =
 -- >>> set (product fstL sndL) (("abc", 3), (4, "def")) ("ghi", "jkl")
 -- (("ghi",3),(4,"jkl"))
 product ::
+  forall s t a b q r c d.
   Lens s t a b
   -> Lens q r c d
   -> Lens (s, q) (t, r) (a, c) (b, d)
-product _ _ =
-  error "todo: product"
+product l m = \f (a, c) ->
+  getAlongsideRight (m (\b2 -> AlongsideRight (
+  getAlongsideLeft (l (\b1 -> AlongsideLeft (
+    f (b1, b2))) a))) c)
 
 -- | An alias for @product@.
 (***) ::
@@ -581,8 +589,10 @@ choice ::
   Lens s t a b
   -> Lens q r a b
   -> Lens (Either s q) (Either t r) a b
-choice _ _ =
-  error "todo: choice"
+choice l m = \f e ->
+  case e of
+    Left s -> Left <$> l f s
+    Right q -> Right <$> m f q
 
 -- | An alias for @choice@.
 (|||) ::
@@ -666,7 +676,7 @@ getSuburb ::
   Person
   -> String
 getSuburb =
-  error "todo: getSuburb"
+    get (addressL . suburbL)
 
 -- |
 --
@@ -680,7 +690,7 @@ setStreet ::
   -> String
   -> Person
 setStreet =
-  error "todo: setStreet"
+    set (addressL . streetL)
 
 -- |
 --
@@ -693,7 +703,7 @@ getAgeAndCountry ::
   (Person, Locality)
   -> (Int, String)
 getAgeAndCountry =
-  error "todo: getAgeAndCountry"
+    get (product ageL countryL)
 
 -- |
 --
@@ -705,8 +715,8 @@ getAgeAndCountry =
 setCityAndLocality ::
   (Person, Address) -> (String, Locality) -> (Person, Address)
 setCityAndLocality =
-  error "todo: setCityAndLocality"
-  
+    set (product (addressL . localityL . cityL) localityL)
+
 -- |
 --
 -- >>> getSuburbOrCity (Left maryAddress)
@@ -718,7 +728,7 @@ getSuburbOrCity ::
   Either Address Locality
   -> String
 getSuburbOrCity =
-  error "todo: getSuburbOrCity"
+    get (choice suburbL cityL)
 
 -- |
 --
@@ -732,7 +742,7 @@ setStreetOrState ::
   -> String
   -> Either Person Locality
 setStreetOrState =
-  error "todo: setStreetOrState"
+    set (choice (addressL . streetL) stateL)
 
 -- |
 --
@@ -745,7 +755,7 @@ modifyCityUppercase ::
   Person
   -> Person
 modifyCityUppercase =
-  error "todo: modifyCityUppercase"
+    modify (addressL . localityL . cityL) (fmap toUpper)
 
 -- |
 --
@@ -757,10 +767,11 @@ modifyCityUppercase =
 modifyIntAndLengthEven ::
   IntAnd [a]
   -> IntAnd Bool
-modifyIntAndLengthEven =
-  error "todo: modifyIntAndLengthEven"
-
-----
+modifyIntAndLengthEven ia =
+    let
+      int = get intAndIntL ia
+    in
+      set intAndL ia (even int)
 
 -- |
 --
@@ -768,8 +779,11 @@ modifyIntAndLengthEven =
 -- Locality "ABC" "DEF" "GHI"
 traverseLocality ::
   Traversal' Locality String
-traverseLocality =
-  error "todo: traverseLocality"
+traverseLocality f (Locality x y z) =
+    Locality
+      <$> f x
+      <*> f y
+      <*> f z
 
 -- |
 --
